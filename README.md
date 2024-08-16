@@ -36,7 +36,7 @@ python csv2fasta.py Sequences.csv [-w]
 The input file and script have to be in the same directory. The optional "-w" is written without brackets.
 
 ### Example
-#### Input CSV file
+#### Input CSV file should have "Name" and "Sequence" headers
 
 | Name      | Sequence            |
 | :---      | :---                |
@@ -45,12 +45,26 @@ The input file and script have to be in the same directory. The optional "-w" is
 
 Note: DNA2 is more than 100 nt long.
 
-#### Output 'Sequences.fasta' file without the "-w" option
+#### Output 'Sequences.fasta' file WITHOUT the "-w" option
 
 \>DNA1<br>ATCGATCG<br>
 \>DNA2<br>GATGCATACTTCGT...ACAAAGAAT
 
-#### Output 'Sequences.fasta' file with the "-w" option
+#### Output 'Sequences.fasta' file WITH the "-w" option
 
 \>DNA1<br>ATCGATCG<br>
 \>DNA2<br>GATGCATACTTCGT...<br>ACAAAGAAT
+
+### Notes and Limitations
+#### Input file
+- A .csv file. 
+  - The extension must end with ".csv" or ".CSV".
+  - Other extensions, including ".txt" files will not work.
+  - Non UTF-8 characters may produce an error.
+  - CSV files without header may skip the first Name:Sequence row. So check file after completion.
+#### Output file 
+  - File will be named "Sequences.fasta".
+     - If wrapping is enabled, it will produce 100 nt lines until end of sequence.
+
+Please let me know if you encounter any bugs or problems.
+
