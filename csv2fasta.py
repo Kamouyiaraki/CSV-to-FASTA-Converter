@@ -1,91 +1,102 @@
 import csv
 import argparse
-import sys
+import os
 import textwrap
 
-parser = argparse.ArgumentParser(
-        description = ("Converts CSV files into FastA file. Input CSV file should contain \n"
-                        "only two columns 'Name' and 'Sequence' and must end with '.csv' extension. \n"
-                        "The sequence input should not be split into multiple rows. \n"
-                        ),
-        epilog = "Outputs a 'Sequences.fasta' file with names and sequences from the CSV file. \n"
-                                 )
-
-parser.add_argument("file", metavar = "-file", help = "A CSV file. \n")
-
-parser.add_argument("-w", "--wrap", action = "store_true",
-                    help = "optional argument placed after the file that "
-                    "wraps the FastA sequence into 100 bases per line \n"
-                    )
-                    
-args = parser.parse_args()
-
-def csv_to_fasta(fileinput):
+def process_csv(input_file, name_col, seq_col, output_dir, wrap, fwd_col=None, rev_col=None):
+    """
+    Process a CSV file and generate FASTA files.
+    Handles both single FASTA and dual FASTA modes.
+    """
     try:
-        #Create an empyt dictionary for sequence key-value pairs
-        sequences = {}
-        with open(fileinput, "r") as csvfile:
-            #Need to include this line to skip the first line
-            readcsv = csv.reader(csvfile, delimiter = ",")
-            #Skips first row
-            first_line = csvfile.readline()
-            #Adds each row to the dictionary as key-value pair
-            for row in readcsv:
-                sequences[row[0]] = row[1]
-        
-        with open("Sequences.fasta", "w") as file_output:
-            for (key, value) in sequences.items():
-                #Prints name and sequences as a fasta format
-                file_output.write(">" + str(key) + "\n" + str(value) + "\n")
+        with open(input_file, "r", encoding="ascii") as csvfile:
+            reader = csv.DictReader(csvfile)
+            detected_columns = reader.fieldnames
             
-            return "Sequences.fasta file successfully created"
-    except:
-        return "Not a valid CSV file"
+            # Check if the required columns exist
+            if name_col not in detected_columns:
+                raise KeyError(f"Column '{name_col}' not found in the CSV. Detected columns: {detected_columns}")
+            
+            if seq_col and seq_col not in detected_columns:
+                raise KeyError(f"Column '{seq_col}' not found in the CSV. Detected columns: {detected_columns}")
+            
+            if fwd_col and fwd_col not in detected_columns:
+                raise KeyError(f"Column '{fwd_col}' not found in the CSV. Detected columns: {detected_columns}")
+            
+            if rev_col and rev_col not in detected_columns:
+                raise KeyError(f"Column '{rev_col}' not found in the CSV. Detected columns: {detected_columns}")
+            
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+            
+            if fwd_col and rev_col:
+                # Dual FASTA mode
+                fwd_file = os.path.join(output_dir, "forward_sequences.fasta")
+                rev_file = os.path.join(output_dir, "reverse_sequences.fasta")
+                
+                with open(fwd_file, "w") as fwd_fasta, open(rev_file, "w") as rev_fasta:
+                    for row in reader:
+                        fwd_fasta.write(f">{row[name_col]}\n")
+                        fwd_fasta.write(textwrap.fill(row[fwd_col], 100) if wrap else row[fwd_col] + "\n")
+                        
+                        rev_fasta.write(f">{row[name_col]}\n")
+                        rev_fasta.write(textwrap.fill(row[rev_col], 100) if wrap else row[rev_col] + "\n")
+                print(f"Dual FASTA files created: {fwd_file}, {rev_file}")
+            
+            else:
+                # Single FASTA mode
+                fasta_file = os.path.join(output_dir, "sequences.fasta")
+                with open(fasta_file, "w") as fasta:
+                    for row in reader:
+                        fasta.write(f">{row[name_col]}\n")
+                        fasta.write(textwrap.fill(row[seq_col], 100) if wrap else row[seq_col] + "\n")
+                print(f"Single FASTA file created: {fasta_file}")
+    
+    except Exception as e:
+        print(f"Error: {e}")
+        raise
 
-def csv_to_fasta_wrap(fileinput):
+def main():
+    parser = argparse.ArgumentParser(
+        description="Converts CSV files into FASTA files. Handles both single FASTA and dual FASTA modes."
+    )
+    parser.add_argument("-i", "--input", required=True, help="Path to the input CSV file.")
+    parser.add_argument("-n", "--name_column", required=True, help="Column name for sequence IDs.")
+    parser.add_argument("-s", "--sequence_column", help="Column name for sequences (single FASTA mode).")
+    parser.add_argument("-f", "--forward_column", help="Column name for forward sequences (dual FASTA mode).")
+    parser.add_argument("-r", "--reverse_column", help="Column name for reverse sequences (dual FASTA mode).")
+    parser.add_argument("-o", "--output_dir", required=True, help="Output directory for FASTA files.")
+    parser.add_argument("-w", "--wrap", action="store_true", help="Wrap sequences to 100 characters per line.")
+    
+    args = parser.parse_args()
+
+    # Determine FASTA mode
+    dual = bool(args.forward_column and args.reverse_column)
+    single = bool(args.sequence_column)
+
+    if not dual and not single:
+        parser.error("Either --sequence_column (single FASTA mode) or both --forward_column and --reverse_column (dual FASTA mode) must be specified.")
+    
     try:
-        #Create an empyt dictionary for sequence key-value pairs
-        sequences = {}
-        with open(fileinput, "r") as csvfile:
-            #Need to include this line to skip the first line
-            readcsv = csv.reader(csvfile, delimiter = ",")
-            #Skips first row
-            first_line = csvfile.readline()
-            #Adds each row to the dictionary as key-value pair
-            for row in readcsv:
-                sequences[row[0]] = row[1]
-        
-        with open("Sequences.fasta", "w") as file_output:
-            for (key, value) in sequences.items():
-                #Prints the 'Name' of the sequence first
-                file_output.write(">" + str(key) + "\n")
-                #Then prints the sequence in a new line wrapped at 100 characters
-                file_output.write(textwrap.fill(str(value), 100) + "\n")
-            
-            return "Sequences.fasta file successfully created"
-    except:
-        return "Not a valid CSV file"
+        process_csv(
+            input_file=args.input,
+            name_col=args.name_column,
+            seq_col=args.sequence_column,
+            output_dir=args.output_dir,
+            wrap=args.wrap,
+            fwd_col=args.forward_column,
+            rev_col=args.reverse_column,
+        )
+    except Exception as e:
+        print(f"Failed to process the CSV: {e}")
 
 if __name__ == "__main__":
-    try:
-        if len(sys.argv) >= 2:
-            if len(sys.argv) == 2:
-                if sys.argv[1].endswith((".csv", ".CSV")):
-                    converter = csv_to_fasta(sys.argv[1])
-                    print(converter)
-                else:
-                    raise FileNotFound
-            elif len(sys.argv) == 3 and sys.argv[2]  == "-w":
-                if sys.argv[1].endswith((".csv", ".CSV")):
-                    converter = csv_to_fasta_wrap(sys.argv[1])
-                    print(converter)
-                else:
-                    raise FileNotFound
-            else:
-                raise IOError
-        else:
-            raise IOError
-    except (FileNotFound, IOError):
-        sys.exit("The file does not exist, wrong extension, or invalid command line inputs")
-                
-    
+    main()
+
+
+#single fasta usage:
+#python csv2fasta.py -i input.csv -n Name -s Sequence -o /path/to/output
+#forward and reverse fasta usage:
+#python csv2fasta.py -i input.csv -n ID -f Forward -r Reverse -o /path/to/output
+#-w to wrap fasta instead of single line fasta
+
